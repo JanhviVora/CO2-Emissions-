@@ -1,0 +1,95 @@
+library(readr)
+library(plyr)
+library(dummies)
+library(MASS)
+
+CO2_Emissions_Canada <- read.csv("DSC/CSIS3360/co2_emission/CO2 Emissions_Canada.csv", header=TRUE)
+
+# show the first 6 rows
+head(CO2_Emissions_Canada)
+
+names(CO2_Emissions_Canada)
+
+# change the header of columns 
+colnames(CO2_Emissions_Canada)
+colnames(CO2_Emissions_Canada)[8] <- "f_city"
+colnames(CO2_Emissions_Canada)[c(3,4)] <- c("class","size")
+colnames(CO2_Emissions_Canada)[c(9,10)] <- c("f_hwy", "f_comb")
+colnames(CO2_Emissions_Canada)[7] <- "f_type"
+colnames(CO2_Emissions_Canada)[11] <- "f_comb_mpg"
+colnames(CO2_Emissions_Canada)[12] <- "co2"
+
+# check null values
+sum(is.na(CO2_Emissions_Canada))
+
+
+# change the value of Transmission columns
+CO2_Emissions_Canada$Transmission <- mapvalues(CO2_Emissions_Canada$Transmission, from = c("A4", "A5", "A6", "A7", "A8", "A9", "A10"), to = c("Automatic","Automatic","Automatic","Automatic","Automatic","Automatic", "Automatic"))
+CO2_Emissions_Canada$Transmission <- mapvalues(CO2_Emissions_Canada$Transmission, from = c("AM5", "AM6", "AM7", "AM8", "AM9"), to = c("Automated Manual","Automated Manual","Automated Manual","Automated Manual","Automated Manual"))
+CO2_Emissions_Canada$Transmission <- mapvalues(CO2_Emissions_Canada$Transmission, from = c("AS4", "AS5", "AS6", "AS7", "AS8", "AS9", "AS10"), to = c("Automatic with select shift","Automatic with select shift","Automatic with select shift","Automatic with select shift","Automatic with select shift","Automatic with select shift","Automatic with select shift"))
+CO2_Emissions_Canada$Transmission <- mapvalues(CO2_Emissions_Canada$Transmission, from = c("AV", "AV6", "AV7", "AV8", "AV10"), to = c("Continuously Variable","Continuously Variable","Continuously Variable","Continuously Variable","Continuously Variable"))
+CO2_Emissions_Canada$Transmission <- mapvalues(CO2_Emissions_Canada$Transmission, from = c("M5", "M6", "M7"), to = c("Manual","Manual","Manual"))
+
+
+# add dummies
+CO2_Emissions_Canada <- dummy.data.frame(CO2_Emissions_Canada, names = c("Transmission"), sep="_")
+CO2_Emissions_Canada <- dummy.data.frame(CO2_Emissions_Canada, names = c("f_type"), sep="_")
+CO2_Emissions_Canada <- dummy.data.frame(CO2_Emissions_Canada, names = c("Make"), sep="_")
+
+# drop don't need columns 
+CO2_Emissions_Canada <- subset(CO2_Emissions_Canada, select = -c(class, Model))
+
+
+# split dataset as training and test
+set.seed(1)
+train_index <- sample(1:nrow(CO2_Emissions_Canada), nrow(CO2_Emissions_Canada) *0.8)
+test_index <- setdiff(1:nrow(CO2_Emissions_Canada), train_index)
+trainingData = CO2_Emissions_Canada[train_index, ]
+testData = CO2_Emissions_Canada[test_index,]
+
+# build the linear regression model with all features
+lm_model <- lm(co2 ~ ., data=trainingData)
+
+
+# Using step-wise to select columns
+step <- stepAIC(lm_model, direction = "both", trace = FALSE)
+
+step$anova
+#Final Model:
+#co2 ~ Make_ACURA + `Make_ALFA ROMEO` + `Make_ASTON MARTIN` + 
+#  Make_BENTLEY + Make_BUGATTI + Make_BUICK + Make_CADILLAC + 
+#  Make_CHEVROLET + Make_CHRYSLER + Make_DODGE + Make_FORD + 
+#  Make_GENESIS + Make_GMC + Make_HONDA + Make_HYUNDAI + Make_JEEP + 
+#  Make_KIA + Make_LAMBORGHINI + Make_LEXUS + Make_LINCOLN + 
+#  Make_MASERATI + `Make_MERCEDES-BENZ` + Make_NISSAN + Make_PORSCHE + 
+#  Make_RAM + `Make_ROLLS-ROYCE` + Make_SCION + Make_TOYOTA + 
+#  size + Cylinders + `Transmission_Automated Manual` + f_type_D + 
+#  f_type_E + f_type_X + f_city + f_hwy + f_comb + f_comb_mpg
+
+# build the final model
+lm_model <- lm(co2 ~ Make_ACURA + `Make_ALFA ROMEO` + `Make_ASTON MARTIN` + 
+                 Make_BENTLEY + Make_BUGATTI + Make_BUICK + Make_CADILLAC + 
+                 Make_CHEVROLET + Make_CHRYSLER + Make_DODGE + Make_FORD + 
+                 Make_GENESIS + Make_GMC + Make_HONDA + Make_HYUNDAI + Make_JEEP + 
+                 Make_KIA + Make_LAMBORGHINI + Make_LEXUS + Make_LINCOLN + 
+                 Make_MASERATI + `Make_MERCEDES-BENZ` + Make_NISSAN + Make_PORSCHE + 
+                 Make_RAM + `Make_ROLLS-ROYCE` + Make_SCION + Make_TOYOTA + 
+                 size + Cylinders + `Transmission_Automated Manual` + f_type_D + 
+                 f_type_E + f_type_X + f_city + f_hwy + f_comb + f_comb_mpg, data=trainingData)
+
+
+summary(lm_model)
+
+# get the prediction
+predict <- predict(lm_model, testData)
+
+actuals_preds <- data.frame(cbind(actuals=testData$co2, predicteds=predict))  
+
+mean(apply(actuals_preds, 1, min) / apply(actuals_preds, 1, max)) 
+#Min Max Accuracy: 98.84%
+
+mean(abs((actuals_preds$predicteds - actuals_preds$actuals))/actuals_preds$actuals)
+#Mean absolute percentage error: 1.17%
+
+
+

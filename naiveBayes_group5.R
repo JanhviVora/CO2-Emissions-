@@ -1,0 +1,69 @@
+library(readr)
+library(e1071)
+
+CO2_Emissions_Canada <- read.csv("DSC/CSIS3360/co2_emission/CO2 Emissions_Canada.csv", header=TRUE)
+
+# show the first 6 rows
+head(CO2_Emissions_Canada)
+
+names(CO2_Emissions_Canada)
+
+# change the header of columns 
+colnames(CO2_Emissions_Canada)
+colnames(CO2_Emissions_Canada)[8] <- "f_city"
+colnames(CO2_Emissions_Canada)[c(3,4)] <- c("class","size")
+colnames(CO2_Emissions_Canada)[c(9,10)] <- c("f_hwy", "f_comb")
+colnames(CO2_Emissions_Canada)[7] <- "f_type"
+colnames(CO2_Emissions_Canada)[11] <- "f_comb_mpg"
+colnames(CO2_Emissions_Canada)[12] <- "co2"
+
+# check null values
+sum(is.na(CO2_Emissions_Canada))
+
+# CO2 over thrid quartile as high, below first quartile as low, and others as medium
+boxplot(CO2_Emissions_Canada$co2)
+quantile(CO2_Emissions_Canada$co2)
+# 0%  25%  50%  75% 100% 
+# 96  208  246  288  522 
+CO2_Emissions_Canada$label <- with(CO2_Emissions_Canada, ifelse(co2 > 288, "high", ifelse(co2 > 208, "medium", "low")))
+
+
+# split dataset as training and test
+set.seed(1)
+train_index <- sample(1:nrow(CO2_Emissions_Canada), nrow(CO2_Emissions_Canada) *0.8)
+test_index <- setdiff(1:nrow(CO2_Emissions_Canada), train_index)
+trainingData = CO2_Emissions_Canada[train_index, ]
+testData = CO2_Emissions_Canada[test_index,]
+
+
+# build the naiveBayes model
+bay_model <- naiveBayes(as.factor(label) ~ Make + Model  + class + Transmission + f_type  , trainingData)
+
+# generate the prediction
+predict <- predict(bay_model, testData)
+
+# confusion table
+cm = as.matrix(table(Actual = testData$label, Predicted = predict))
+cm
+
+n = sum(cm) # number of instances
+nc = nrow(cm) # number of classes
+diag = diag(cm) # number of correctly classified instances per class 
+rowsums = apply(cm, 1, sum) # number of instances per class
+colsums = apply(cm, 2, sum) # number of predictions per class
+p = rowsums / n # distribution of instances over the actual classes
+q = colsums / n # distribution of instances over the predicted classes
+sum(diag)/n 
+# accuracy: 0.7366283
+
+
+precision = diag/colsums 
+recall = diag/rowsums 
+f1 = 2 * precision * recall / (precision + recall)
+
+data.frame(precision, recall, f1) 
+#       precision    recall        f1
+#high   0.7175000 0.7229219 0.7202008
+#low    0.7146597 0.7913043 0.7510316
+#medium 0.7597122 0.7183673 0.7384615
+
